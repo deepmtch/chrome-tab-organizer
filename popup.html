@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Tab Sorter</title>
+  <style>
+    body {
+      width: 250px;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      background-color: #f0f0f0;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+      border: none;
+      border-radius: 5px;
+      font-size: 14px;
+      font-weight: bold;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    #sortTabs {
+      background-color: #4285F4;
+    }
+    #sortTabs:hover {
+      background-color: #3367D6;
+    }
+    #groupAllTabs {
+      background-color: #34A853;
+    }
+    #groupAllTabs:hover {
+      background-color: #2E8B57;
+    }
+    #removeDuplicates {
+      background-color: #EA4335;
+    }
+    #removeDuplicates:hover {
+      background-color: #C53929;
+    }
+  </style>
+</head>
+<body>
+  <button id="sortTabs">Sort Tabs by Domain</button>
+  <button id="groupAllTabs">Group All Tabs</button>
+  <button id="removeDuplicates">Remove Duplicates</button>
+  <script src="popup.js"></script>
+</body>
+</html>
