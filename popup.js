@@ -18,3 +18,10 @@ document.getElementById('removeDuplicates').addEventListener('click', () => {
     window.close();
   });
 });
+
+
+document.getElementById('clearBrowsingData').addEventListener('click', () => {
+  chrome.runtime.sendMessage({ action: 'clearBrowsingDataOfCurrentTabDomain' }, () => {
+    window.close();
+  });
+});
