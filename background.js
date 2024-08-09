@@ -14,9 +14,13 @@ function sortTabs() {
 
     Object.entries(groups).forEach(([domain, tabIds]) => {
       if (tabIds.length > 1) {
-        chrome.tabs.group({ tabIds }, (groupId) => {
-          chrome.tabGroups.update(groupId, { title: domain });
-        });
+        try {
+          chrome.tabs.group({ tabIds }, (groupId) => {
+            chrome.tabGroups.update(groupId, { title: domain });
+          });
+        } catch (error) {
+          console.error("An error occurred:", error);
+        }
       }
     });
 
@@ -28,12 +32,20 @@ function sortTabs() {
 }
 
 function groupAllTabs(groupName) {
-  chrome.tabs.query({ currentWindow: true }, (tabs) => {
-    const tabIds = tabs.map(tab => tab.id);
-    chrome.tabs.group({ tabIds }, (groupId) => {
-      chrome.tabGroups.update(groupId, { title: groupName });
+  try {
+    chrome.tabs.query({ currentWindow: true }, (tabs) => {
+      const tabIds = tabs.map(tab => tab.id);
+      try {
+        chrome.tabs.group({ tabIds }, (groupId) => {
+          chrome.tabGroups.update(groupId, { title: groupName });
+        });
+      } catch (error) {
+        console.error("An error occurred:", error);
+      }
     });
-  });
+  } catch (error) {
+    console.error("An error occurred:", error);
+  }
 }
 
 function removeDuplicates() {
@@ -75,13 +87,17 @@ function moveTabToRight(tabId, ungroup = false) {
       } else {
         console.log("Tab moved successfully");
         if (ungroup) {
-          chrome.tabs.ungroup(tabId, () => {
-            if (chrome.runtime.lastError) {
-              console.error("Error ungrouping tab:", chrome.runtime.lastError);
-            } else {
-              console.log("Tab ungrouped successfully");
-            }
-          });
+          try {
+            chrome.tabs.ungroup(tabId, () => {
+              if (chrome.runtime.lastError) {
+                console.error("Error ungrouping tab:", chrome.runtime.lastError);
+              } else {
+                console.log("Tab ungrouped successfully");
+              }
+            });
+          } catch (error) {
+            console.error("An error occurred:", error);
+          }
         }
       }
     });
@@ -126,13 +142,17 @@ function manageArchiveGroup(activeTabId) {
           archiveGroupId = groups[0].id;
           processArchive(tabs, activeTabId);
         } else if (tabs.length > 5) {  // Only create archive if there are more than 5 tabs
-          chrome.tabs.group({ tabIds: [tabs[5].id] }, (groupId) => {
-            chrome.tabGroups.update(groupId, { title: "Archive", collapsed: true }, () => {
-              archiveGroupId = groupId;
-              moveArchiveGroupToLeft();
-              processArchive(tabs, activeTabId);
+          try {
+            chrome.tabs.group({ tabIds: [tabs[5].id] }, (groupId) => {
+              chrome.tabGroups.update(groupId, { title: "Archive", collapsed: true }, () => {
+                archiveGroupId = groupId;
+                moveArchiveGroupToLeft();
+                processArchive(tabs, activeTabId);
+              });
             });
-          });
+          } catch (error) {
+            console.error("An error occurred:", error);
+          }
         }
       });
     } else {
@@ -142,14 +162,18 @@ function manageArchiveGroup(activeTabId) {
 }
 
 function moveArchiveGroupToLeft() {
-  if (archiveGroupId !== null) {
-    chrome.tabGroups.move(archiveGroupId, { index: 0 }, () => {
-      if (chrome.runtime.lastError) {
-        console.error("Error moving Archive group:", chrome.runtime.lastError);
-      } else {
-        console.log("Archive group moved to the left");
-      }
-    });
+  try {
+    if (archiveGroupId !== null) {
+      chrome.tabGroups.move(archiveGroupId, { index: 0 }, () => {
+        if (chrome.runtime.lastError) {
+          console.error("Error moving Archive group:", chrome.runtime.lastError);
+        } else {
+          console.log("Archive group moved to the left");
+        }
+      });
+    }
+  } catch (error) {
+    console.error("An error occurred:", error);
   }
 }
 
@@ -166,15 +190,19 @@ function processArchive(tabs, activeTabId) {
       const newTabsToArchive = tabsToArchive.filter(id => !existingArchivedTabIds.includes(id));
 
       if (newTabsToArchive.length > 0) {
-        chrome.tabs.group({ tabIds: newTabsToArchive, groupId: archiveGroupId }, () => {
-          if (chrome.runtime.lastError) {
-            console.error("Error grouping tabs:", chrome.runtime.lastError);
-          } else {
-            chrome.tabGroups.update(archiveGroupId, { collapsed: true }, () => {
-              moveArchiveGroupToLeft();
-            });
-          }
-        });
+        try {
+          chrome.tabs.group({ tabIds: newTabsToArchive, groupId: archiveGroupId }, () => {
+            if (chrome.runtime.lastError) {
+              console.error("Error grouping tabs:", chrome.runtime.lastError);
+            } else {
+              chrome.tabGroups.update(archiveGroupId, { collapsed: true }, () => {
+                moveArchiveGroupToLeft();
+              });
+            }
+          });
+        } catch (error) {
+          console.error("An error occurred:", error);
+        }
       } else {
         moveArchiveGroupToLeft();
       }
