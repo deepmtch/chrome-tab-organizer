@@ -87,7 +87,16 @@ function moveTabToRight(tabId, ungroup = false) {
     });
   };
 
-  moveTab();
+  // Set a timeout for 2 seconds
+  setTimeout(() => {
+    chrome.tabs.get(tabId, (tab) => {
+      if (tab && tab.active) {
+        moveTab();
+      } else {
+        console.log("Tab is no longer active, cancelling move");
+      }
+    });
+  }, 2000);
 }
 
 function showPopup() {
