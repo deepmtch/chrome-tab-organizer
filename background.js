@@ -181,13 +181,19 @@ function processArchive(tabs, activeTabId) {
       .map(tab => tab.id);
 
     if (tabsToRemoveFromArchive.length > 0) {
-      chrome.tabs.ungroup(tabsToRemoveFromArchive, () => {
-        if (chrome.runtime.lastError) {
-          console.error("Error ungrouping tabs:", chrome.runtime.lastError);
-        } else {
-          moveArchiveGroupToLeft();
-        }
-      });
+      try{
+        chrome.tabs.ungroup(tabsToRemoveFromArchive, () => {
+          if (chrome.runtime.lastError) {
+            console.error("Error ungrouping tabs:", chrome.runtime.lastError);
+          } else {
+            moveArchiveGroupToLeft();
+          }
+        });
+      }
+      catch(e){
+        console.error("Error ungrouping tabs:", e);
+      }
+
     }
   });
 }
