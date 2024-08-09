@@ -61,6 +61,7 @@ function removeDuplicates() {
     }
   });
 }
+
 function moveTabToRight(tabId) {
   const moveTab = (attempt = 0) => {
     chrome.tabs.move(tabId, {index: -1}, () => {
@@ -79,6 +80,7 @@ function moveTabToRight(tabId) {
 
   moveTab();
 }
+
 function showPopup() {
   console.log("Showing popup");
   // chrome.windows.create({
@@ -88,12 +90,101 @@ function showPopup() {
   //   height: 200
   // });
 }
+
 let lastActivatedTime = 0;
 const DEBOUNCE_TIME = 50; // milliseconds
+
+let archiveGroupId = null;
+
+function manageArchiveGroup(activeTabId) {
+  chrome.tabs.query({ currentWindow: true }, (tabs) => {
+    // Sort tabs by last accessed time, most recent first
+    tabs.sort((a, b) => b.lastAccessed - a.lastAccessed);
+    
+    // Find or create the archive group
+    if (!archiveGroupId) {
+      chrome.tabGroups.query({ title: "Archive" }, (groups) => {
+        if (groups.length > 0) {
+          archiveGroupId = groups[0].id;
+          processArchive(tabs, activeTabId);
+        } else if (tabs.length > 5) {  // Only create archive if there are more than 5 tabs
+          chrome.tabs.group({ tabIds: [tabs[5].id] }, (groupId) => {
+            chrome.tabGroups.update(groupId, { title: "Archive", collapsed: true }, () => {
+              archiveGroupId = groupId;
+              moveArchiveGroupToLeft();
+              processArchive(tabs, activeTabId);
+            });
+          });
+        }
+      });
+    } else {
+      processArchive(tabs, activeTabId);
+    }
+  });
+}
+
+function moveArchiveGroupToLeft() {
+  if (archiveGroupId !== null) {
+    chrome.tabGroups.move(archiveGroupId, { index: 0 }, () => {
+      if (chrome.runtime.lastError) {
+        console.error("Error moving Archive group:", chrome.runtime.lastError);
+      } else {
+        console.log("Archive group moved to the left");
+      }
+    });
+  }
+}  
+
+function processArchive(tabs, activeTabId) {
+  const recentTabs = tabs.slice(0, 5).map(tab => tab.id);
+  const tabsToArchive = tabs.slice(5).map(tab => tab.id).filter(id => id !== activeTabId);
+  
+  // Move tabs to archive
+  if (tabsToArchive.length > 0) {
+    chrome.tabs.query({groupId: archiveGroupId}, (existingArchivedTabs) => {
+      const existingArchivedTabIds = existingArchivedTabs.map(tab => tab.id);
+      const newTabsToArchive = tabsToArchive.filter(id => !existingArchivedTabIds.includes(id));
+      
+      if (newTabsToArchive.length > 0) {
+        chrome.tabs.group({ tabIds: newTabsToArchive, groupId: archiveGroupId }, () => {
+          if (chrome.runtime.lastError) {
+            console.error("Error grouping tabs:", chrome.runtime.lastError);
+          } else {
+            chrome.tabGroups.update(archiveGroupId, { collapsed: true }, () => {
+              moveArchiveGroupToLeft();
+            });
+          }
+        });
+      } else {
+        moveArchiveGroupToLeft();
+      }
+    });
+  } else {
+    moveArchiveGroupToLeft();
+  }
+  
+  // Remove recent tabs from archive
+  chrome.tabs.query({groupId: archiveGroupId}, (archivedTabs) => {
+    const tabsToRemoveFromArchive = archivedTabs
+      .filter(tab => recentTabs.includes(tab.id))
+      .map(tab => tab.id);
+    
+    if (tabsToRemoveFromArchive.length > 0) {
+      chrome.tabs.ungroup(tabsToRemoveFromArchive, () => {
+        if (chrome.runtime.lastError) {
+          console.error("Error ungrouping tabs:", chrome.runtime.lastError);
+        } else {
+          moveArchiveGroupToLeft();
+        }
+      });
+    }
+  });
+}
 
 function setupTabListeners() {
   chrome.tabs.onActivated.addListener((activeInfo) => {
     moveTabToRight(activeInfo.tabId);
+    manageArchiveGroup(activeInfo.tabId);
     const now = Date.now();
     if (now - lastActivatedTime > DEBOUNCE_TIME) {
       showPopup();
@@ -104,6 +195,7 @@ function setupTabListeners() {
   chrome.tabs.onHighlighted.addListener((highlightInfo) => {
     const tabId = highlightInfo.tabIds[0];
     moveTabToRight(tabId);
+    manageArchiveGroup(tabId);
     const now = Date.now();
     if (now - lastActivatedTime > DEBOUNCE_TIME) {
       showPopup();
@@ -114,21 +206,10 @@ function setupTabListeners() {
   chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete') {
       moveTabToRight(tabId);
+      manageArchiveGroup(tabId);
     }
   });
 }
-
-// function setupTabListeners() {
-//   chrome.tabs.onActivated.addListener((activeInfo) => {
-//     moveTabToRight(activeInfo.tabId);
-//   });
-
-//   chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-//     if (changeInfo.status === 'complete') {
-//       moveTabToRight(tabId);
-//     }
-//   });
-// }
 
 function clearBrowsingDataOfCurrentTabDomain() {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -174,4 +255,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     clearBrowsingDataOfCurrentTabDomain();
   }
   sendResponse({});
+});
+
+chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
+  manageArchiveGroup(null);
+});
+
+chrome.tabGroups.onMoved.addListener((group) => {
+  if (group.id === archiveGroupId) {
+    moveArchiveGroupToLeft();
+  }
+});
+chrome.tabGroups.onUpdated.addListener((group) => {
+  if (group.id === archiveGroupId && !group.collapsed) {
+    // User has expanded the archive group
+    console.log("Archive group expanded by user");
+    // You can add any additional actions here if needed
+  }
 });

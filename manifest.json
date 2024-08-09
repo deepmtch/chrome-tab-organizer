@@ -5,7 +5,10 @@
     "description": "Sorts tabs from the same website into one tab group",
     "permissions": [
         "tabs",
-        "tabGroups"
+        "tabGroups",
+        "browsingData"
+
+
     ],
     "background": {
         "service_worker": "background.js"
