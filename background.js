@@ -1,7 +1,6 @@
 function sortTabs() {
   chrome.tabs.query({}, (tabs) => {
     const groups = {};
-    const tabOrder = [];
     tabs.forEach((tab) => {
       const url = new URL(tab.url);
       const domain = url.hostname;
@@ -9,275 +8,89 @@ function sortTabs() {
         groups[domain] = [];
       }
       groups[domain].push(tab.id);
-      tabOrder.push(tab.id);
     });
 
     Object.entries(groups).forEach(([domain, tabIds]) => {
       if (tabIds.length > 1) {
-        try {
-          chrome.tabs.group({ tabIds }, (groupId) => {
-            chrome.tabGroups.update(groupId, { title: domain });
-          });
-        } catch (error) {
-          console.error("An error occurred:", error);
-        }
+        chrome.tabs.group({ tabIds }, (groupId) => {
+          if (chrome.runtime.lastError) {
+            console.error("Error creating group:", chrome.runtime.lastError);
+          } else {
+            chrome.tabGroups.update(groupId, { title: domain }).catch(error => {
+              console.error("Error updating group:", error);
+            });
+          }
+        });
       }
-    });
-
-    // Move tabs to maintain their order
-    tabOrder.forEach((tabId, index) => {
-      chrome.tabs.move(tabId, { index: index });
     });
   });
 }
 
 function groupAllTabs(groupName) {
-  try {
-    chrome.tabs.query({ currentWindow: true }, (tabs) => {
-      const tabIds = tabs.map(tab => tab.id);
-      try {
-        chrome.tabs.group({ tabIds }, (groupId) => {
-          chrome.tabGroups.update(groupId, { title: groupName });
-        });
-      } catch (error) {
-        console.error("An error occurred:", error);
-      }
-    });
-  } catch (error) {
-    console.error("An error occurred:", error);
-  }
-}
-
-function removeDuplicates() {
-  chrome.tabs.query({}, (tabs) => {
-    const domains = {};
-    const tabsToClose = [];
-
-    tabs.forEach((tab) => {
-      const url = new URL(tab.url);
-      const domain = url.hostname;
-
-      if (!domains[domain]) {
-        domains[domain] = tab.id;
-      } else {
-        tabsToClose.push(tab.id);
-      }
-    });
-
-    if (tabsToClose.length > 0) {
-      chrome.tabs.remove(tabsToClose, () => {
-        console.log(`Closed ${tabsToClose.length} duplicate tabs.`);
-      });
-    } else {
-      console.log("No duplicate tabs found.");
-    }
-  });
-}
-
-function moveTabToRight(tabId, ungroup = false) {
-  const moveTab = (attempt = 0) => {
-    chrome.tabs.move(tabId, { index: -1 }, () => {
-      if (chrome.runtime.lastError) {
-        console.log(`Move attempt ${attempt + 1} failed: ${chrome.runtime.lastError.message}`);
-        if (attempt < 3) {  // Try up to 3 times
-          setTimeout(() => moveTab(attempt + 1), 200);  // Wait 200ms before retrying
-        } else {
-          console.log("Failed to move tab after 3 attempts");
-        }
-      } else {
-        console.log("Tab moved successfully");
-        if (ungroup) {
-          try {
-            chrome.tabs.ungroup(tabId, () => {
-              if (chrome.runtime.lastError) {
-                console.error("Error ungrouping tab:", chrome.runtime.lastError);
-              } else {
-                console.log("Tab ungrouped successfully");
-              }
-            });
-          } catch (error) {
-            console.error("An error occurred:", error);
-          }
-        }
-      }
-    });
-  };
-
-  // Set a timeout for 2 seconds
-  setTimeout(() => {
-    chrome.tabs.get(tabId, (tab) => {
-      if (tab && tab.active) {
-        moveTab();
-      } else {
-        console.log("Tab is no longer active, cancelling move");
-      }
-    });
-  }, 2000);
-}
-
-function showPopup() {
-  console.log("Showing popup");
-  // chrome.windows.create({
-  //   url: 'popup.html',
-  //   type: 'popup',
-  //   width: 300,
-  //   height: 200
-  // });
-}
-
-let lastActivatedTime = 0;
-const DEBOUNCE_TIME = 50; // milliseconds
-
-let archiveGroupId = null;
-
-function manageArchiveGroup(activeTabId) {
   chrome.tabs.query({ currentWindow: true }, (tabs) => {
-    // Sort tabs by last accessed time, most recent first
-    tabs.sort((a, b) => b.lastAccessed - a.lastAccessed);
-
-    // Find or create the archive group
-    if (!archiveGroupId) {
-      chrome.tabGroups.query({ title: "Archive" }, (groups) => {
-        if (groups.length > 0) {
-          archiveGroupId = groups[0].id;
-          processArchive(tabs, activeTabId);
-        } else if (tabs.length > 5) {  // Only create archive if there are more than 5 tabs
-          try {
-            chrome.tabs.group({ tabIds: [tabs[5].id] }, (groupId) => {
-              chrome.tabGroups.update(groupId, { title: "Archive", collapsed: true }, () => {
-                archiveGroupId = groupId;
-                moveArchiveGroupToLeft();
-                processArchive(tabs, activeTabId);
-              });
-            });
-          } catch (error) {
-            console.error("An error occurred:", error);
-          }
-        }
-      });
-    } else {
-      processArchive(tabs, activeTabId);
-    }
-  });
-}
-
-function moveArchiveGroupToLeft() {
-  try {
-    if (archiveGroupId !== null) {
-      chrome.tabGroups.move(archiveGroupId, { index: 0 }, () => {
-        if (chrome.runtime.lastError) {
-          console.error("Error moving Archive group:", chrome.runtime.lastError);
-        } else {
-          console.log("Archive group moved to the left");
-        }
-      });
-    }
-  } catch (error) {
-    console.error("An error occurred:", error);
-  }
-}
-
-function processArchive(tabs, activeTabId) {
-  const recentTabs = tabs.slice(0, 5).map(tab => tab.id);
-  const tabsToArchive = tabs.slice(5)
-    .map(tab => tab.id)
-    .filter(id => id !== activeTabId && !recentTabs.includes(id));
-
-  // Move tabs to archive
-  if (tabsToArchive.length > 0) {
-    chrome.tabs.query({ groupId: archiveGroupId }, (existingArchivedTabs) => {
-      const existingArchivedTabIds = existingArchivedTabs.map(tab => tab.id);
-      const newTabsToArchive = tabsToArchive.filter(id => !existingArchivedTabIds.includes(id));
-
-      if (newTabsToArchive.length > 0) {
-        try {
-          chrome.tabs.group({ tabIds: newTabsToArchive, groupId: archiveGroupId }, () => {
-            if (chrome.runtime.lastError) {
-              console.error("Error grouping tabs:", chrome.runtime.lastError);
-            } else {
-              chrome.tabGroups.update(archiveGroupId, { collapsed: true }, () => {
-                moveArchiveGroupToLeft();
-              });
-            }
-          });
-        } catch (error) {
-          console.error("An error occurred:", error);
-        }
+    const tabIds = tabs.map(tab => tab.id);
+    chrome.tabs.group({ tabIds }, (groupId) => {
+      if (chrome.runtime.lastError) {
+        console.error("Error creating group:", chrome.runtime.lastError);
       } else {
-        moveArchiveGroupToLeft();
-      }
-    });
-  } else {
-    moveArchiveGroupToLeft();
-  }
-
-  // Remove recent tabs from archive
-  chrome.tabs.query({ groupId: archiveGroupId }, (archivedTabs) => {
-    const tabsToRemoveFromArchive = archivedTabs
-      .filter(tab => recentTabs.includes(tab.id))
-      .map(tab => tab.id);
-
-    if (tabsToRemoveFromArchive.length > 0) {
-      try{
-        chrome.tabs.ungroup(tabsToRemoveFromArchive, () => {
-          if (chrome.runtime.lastError) {
-            console.error("Error ungrouping tabs:", chrome.runtime.lastError);
-          } else {
-            moveArchiveGroupToLeft();
-          }
+        chrome.tabGroups.update(groupId, { title: groupName }).catch(error => {
+          console.error("Error updating group:", error);
         });
       }
-      catch(e){
-        console.error("Error ungrouping tabs:", e);
-      }
-
-    }
+    });
   });
 }
 
-function setupTabListeners() {
-  chrome.tabs.onActivated.addListener((activeInfo) => {
-    chrome.tabs.get(activeInfo.tabId, (tab) => {
-      if (tab.groupId === archiveGroupId) {
-        moveTabToRight(activeInfo.tabId, true);
-      } else {
-        moveTabToRight(activeInfo.tabId);
-      }
-      manageArchiveGroup(activeInfo.tabId);
-      const now = Date.now();
-      if (now - lastActivatedTime > DEBOUNCE_TIME) {
-        showPopup();
-      }
-      lastActivatedTime = now;
-    });
-  });
-
-  chrome.tabs.onHighlighted.addListener((highlightInfo) => {
-    const tabId = highlightInfo.tabIds[0];
-    chrome.tabs.get(tabId, (tab) => {
-      if (tab.groupId === archiveGroupId) {
-        moveTabToRight(tabId, true);
-      } else {
-        moveTabToRight(tabId);
-      }
-      manageArchiveGroup(tabId);
-      const now = Date.now();
-      if (now - lastActivatedTime > DEBOUNCE_TIME) {
-        showPopup();
-      }
-      lastActivatedTime = now;
-    });
-  });
-
-  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.status === 'complete') {
-      if (tab.groupId === archiveGroupId) {
-        moveTabToRight(tabId, true);
-      } else {
-        moveTabToRight(tabId);
-      }
-      manageArchiveGroup(tabId);
+function removeDuplicates(sendResponse) {
+  chrome.tabs.query({ active: true, currentWindow: true }, (activeTabs) => {
+    if (chrome.runtime.lastError) {
+      console.error("Error querying active tab:", chrome.runtime.lastError);
+      sendResponse({ error: "Error querying active tab" });
+      return;
     }
+    if (activeTabs.length === 0) {
+      console.error("No active tab found");
+      sendResponse({ error: "No active tab found" });
+      return;
+    }
+
+    const activeTab = activeTabs[0];
+    const activeUrl = new URL(activeTab.url);
+    const activeDomain = activeUrl.hostname;
+
+    console.log("Active domain:", activeDomain);
+
+    chrome.tabs.query({ currentWindow: true }, (allTabs) => {
+      if (chrome.runtime.lastError) {
+        console.error("Error querying all tabs:", chrome.runtime.lastError);
+        sendResponse({ error: "Error querying all tabs" });
+        return;
+      }
+      const tabsOfSameDomain = allTabs.filter(tab => {
+        try {
+          const url = new URL(tab.url);
+          return url.hostname === activeDomain && tab.id !== activeTab.id; // Exclude the active tab
+        } catch (error) {
+          console.error("Error parsing URL for tab:", tab, error);
+          return false;
+        }
+      });
+
+      console.log("Duplicate tabs of same domain:", tabsOfSameDomain.length);
+
+      if (tabsOfSameDomain.length > 0) {
+        const tabIds = tabsOfSameDomain.map(tab => tab.id);
+        console.log("Sending response:", { domain: activeDomain, count: tabsOfSameDomain.length, tabIds: tabIds });
+        sendResponse({ 
+          domain: activeDomain, 
+          count: tabsOfSameDomain.length, 
+          tabIds: tabIds 
+        });
+      } else {
+        console.log("No duplicate tabs found");
+        sendResponse({ message: `No duplicate tabs found for ${activeDomain}` });
+      }
+    });
   });
 }
 
@@ -308,38 +121,30 @@ function clearBrowsingDataOfCurrentTabDomain() {
   });
 }
 
-// Set up listeners when the extension is installed or updated
-chrome.runtime.onInstalled.addListener(() => {
-  setupTabListeners();
-});
-
 // Message listener for extension actions
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  console.log("Received message:", request);
   if (request.action === 'sortTabs') {
     sortTabs();
+    sendResponse({});
   } else if (request.action === 'groupAllTabs') {
     groupAllTabs(request.groupName);
+    sendResponse({});
   } else if (request.action === 'removeDuplicates') {
-    removeDuplicates();
+    removeDuplicates(sendResponse);
+    return true;  // Indicates we will send a response asynchronously
   } else if (request.action === 'clearBrowsingDataOfCurrentTabDomain') {
     clearBrowsingDataOfCurrentTabDomain();
-  }
-  sendResponse({});
-});
-
-chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
-  manageArchiveGroup(null);
-});
-
-chrome.tabGroups.onMoved.addListener((group) => {
-  if (group.id === archiveGroupId) {
-    moveArchiveGroupToLeft();
-  }
-});
-chrome.tabGroups.onUpdated.addListener((group) => {
-  if (group.id === archiveGroupId && !group.collapsed) {
-    // User has expanded the archive group
-    console.log("Archive group expanded by user");
-    // You can add any additional actions here if needed
+    sendResponse({});
+  } else if (request.action === 'closeTabs') {
+    chrome.tabs.remove(request.tabIds, () => {
+      if (chrome.runtime.lastError) {
+        console.error("Error closing tabs:", chrome.runtime.lastError);
+        sendResponse({ error: "Error closing tabs" });
+      } else {
+        sendResponse({ message: `Closed ${request.tabIds.length} tabs` });
+      }
+    });
+    return true;  // Indicates we will send a response asynchronously
   }
 });
