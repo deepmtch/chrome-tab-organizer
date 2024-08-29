@@ -62,3 +62,44 @@ document.getElementById('clearBrowsingData').addEventListener('click', () => {
     window.close();
   });
 });
+
+document.getElementById('showDomainBookmarks').addEventListener('click', () => {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs.length > 0) {
+      const currentTab = tabs[0];
+      const url = new URL(currentTab.url);
+      const domain = url.hostname;
+
+      chrome.runtime.sendMessage({ action: 'getDomainBookmarks', domain: domain }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.error("Chrome runtime error:", chrome.runtime.lastError);
+          alert("An error occurred while fetching bookmarks. Please check the console for details.");
+          return;
+        }
+
+        const bookmarksContainer = document.getElementById('bookmarksContainer');
+        bookmarksContainer.innerHTML = '';
+
+        if (response.bookmarks && response.bookmarks.length > 0) {
+          const header = document.createElement('h3');
+          header.textContent = `Bookmarks for ${domain}:`;
+          bookmarksContainer.appendChild(header);
+
+          const list = document.createElement('ul');
+          response.bookmarks.forEach((bookmark) => {
+            const item = document.createElement('li');
+            const link = document.createElement('a');
+            link.href = bookmark.url;
+            link.textContent = bookmark.title || bookmark.url;
+            link.target = '_blank';
+            item.appendChild(link);
+            list.appendChild(item);
+          });
+          bookmarksContainer.appendChild(list);
+        } else {
+          bookmarksContainer.textContent = `No bookmarks found for ${domain}.`;
+        }
+      });
+    }
+  });
+});

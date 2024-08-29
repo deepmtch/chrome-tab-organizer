@@ -121,6 +121,20 @@ function clearBrowsingDataOfCurrentTabDomain() {
   });
 }
 
+function getDomainBookmarks(domain, sendResponse) {
+  chrome.bookmarks.search({}, (bookmarks) => {
+    const domainBookmarks = bookmarks.filter((bookmark) => {
+      try {
+        const url = new URL(bookmark.url);
+        return url.hostname === domain;
+      } catch (error) {
+        return false;
+      }
+    });
+    sendResponse({ bookmarks: domainBookmarks });
+  });
+}
+
 // Message listener for extension actions
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log("Received message:", request);
@@ -145,6 +159,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ message: `Closed ${request.tabIds.length} tabs` });
       }
     });
+    return true;  // Indicates we will send a response asynchronously
+  } else if (request.action === 'getDomainBookmarks') {
+    getDomainBookmarks(request.domain, sendResponse);
     return true;  // Indicates we will send a response asynchronously
   }
 });

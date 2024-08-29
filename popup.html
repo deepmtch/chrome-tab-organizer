@@ -4,7 +4,7 @@
   <title>Tab Sorter</title>
   <style>
     body {
-      width: 250px;
+      width: 300px;
       padding: 20px;
       font-family: Arial, sans-serif;
       background-color: #f0f0f0;
@@ -45,6 +45,33 @@
     #clearBrowsingData:hover {
       background-color: #CC7A00;
     }
+    #showDomainBookmarks {
+      background-color: #9C27B0;
+    }
+    #showDomainBookmarks:hover {
+      background-color: #7B1FA2;
+    }
+    #bookmarksContainer {
+      margin-top: 20px;
+      max-height: 200px;
+      overflow-y: auto;
+      background-color: white;
+      padding: 10px;
+      border-radius: 5px;
+    }
+    #bookmarksContainer h3 {
+      margin-top: 0;
+    }
+    #bookmarksContainer ul {
+      padding-left: 20px;
+    }
+    #bookmarksContainer a {
+      color: #4285F4;
+      text-decoration: none;
+    }
+    #bookmarksContainer a:hover {
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
@@ -52,6 +79,8 @@
   <button id="groupAllTabs">Group All Tabs</button>
   <button id="removeDuplicates">Remove Duplicates</button>
   <button id="clearBrowsingData">Clear Browsing Data</button>
+  <button id="showDomainBookmarks">Show Domain Bookmarks</button>
+  <div id="bookmarksContainer"></div>
   <script src="popup.js"></script>
 </body>
 </html>

@@ -6,9 +6,8 @@
     "permissions": [
         "tabs",
         "tabGroups",
-        "browsingData"
-
-
+        "browsingData",
+        "bookmarks"
     ],
     "background": {
         "service_worker": "background.js"
